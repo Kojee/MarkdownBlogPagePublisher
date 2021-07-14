@@ -1,4 +1,6 @@
-﻿using System;
+﻿using CommandLine;
+using MarkdownBlogPagePublisher.CommandLine;
+using System;
 
 namespace MarkdownBlogPagePublisher
 {
@@ -19,6 +21,14 @@ namespace MarkdownBlogPagePublisher
              *      ...
              * 4) markdown file creation
              */
+
+            Parser.Default.ParseArguments<PublishAzure>(args)
+                .WithParsed<PublishAzure>(options => PublishToAzure(options));
+        }
+
+        private static void PublishToAzure(PublishAzure options)
+        {
+            throw new NotImplementedException();
         }
     }
 }
