@@ -1,6 +1,13 @@
-﻿using CommandLine;
+﻿using Azure.Identity;
+using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Models;
+using CommandLine;
 using MarkdownBlogPagePublisher.CommandLine;
 using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace MarkdownBlogPagePublisher
 {
@@ -23,12 +30,59 @@ namespace MarkdownBlogPagePublisher
              */
 
             Parser.Default.ParseArguments<PublishAzure>(args)
-                .WithParsed<PublishAzure>(options => PublishToAzure(options));
+                .WithParsed<PublishAzure>(async options => await PublishToAzure(options));
         }
 
-        private static void PublishToAzure(PublishAzure options)
+        private async static Task PublishToAzure(PublishAzure options)
         {
-            throw new NotImplementedException();
+            var credentials = new InteractiveBrowserCredential();
+            var storageUri = new Uri($"https://{options.AzureStorageName}.blob.core.windows.net");
+            BlobServiceClient blobServiceClient = new BlobServiceClient(storageUri, credentials);
+            var blobContainer = blobServiceClient.GetBlobContainerClient(options.AzureContainerName);
+            if(!(await blobContainer.ExistsAsync()))
+            {
+                await blobContainer.CreateAsync();
+                List<FileInfo> files = GetFilesToUpload(options.InputFolderPath);
+                var uploadTasks = new List<Task<string>>();
+                foreach (var file in files)
+                    uploadTasks.Add(UploadFile(blobContainer, file));
+                await Task.WhenAll(uploadTasks);
+                var downloadLinks = uploadTasks.Select(t => t.Result);
+                CreateMarkdownFile(downloadLinks, options.OutputFilePath);
+            }
+            else
+            {
+                //Show error to user
+            }
+        }
+
+        private static void CreateMarkdownFile(IEnumerable<string> downloadLinks, string outputFilePath)
+        {
+            using (var io = new StreamWriter(outputFilePath))
+            {
+                foreach (var link in downloadLinks)
+                {
+                    io.WriteLine($"<Image src=\"{link}\" quality={{90}}/>");
+                    io.WriteLine($"<br>");
+                }
+            }
+        }
+
+        private async static Task<string> UploadFile(BlobContainerClient blobContainer, FileInfo file)
+        {
+            using (var stream = new FileStream(file.FullName, FileMode.Open))
+            {
+                var client = blobContainer.GetBlobClient(file.Name);
+                await client.UploadAsync(stream);
+                return client.Uri.ToString();
+            }
+
+        }
+
+        private static List<FileInfo> GetFilesToUpload(string inputFolderPath)
+        {
+            var folder = new DirectoryInfo(inputFolderPath);
+            return folder.GetFiles().ToList();
         }
     }
 }
