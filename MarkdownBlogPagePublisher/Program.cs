@@ -1,4 +1,5 @@
 ﻿using Azure.Identity;
+using Azure.Storage;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using CommandLine;
@@ -13,7 +14,7 @@ namespace MarkdownBlogPagePublisher
 {
     class Program
     {
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
             /*
              * 1) INPUT: input folder, output file path, azure/local publication flag
@@ -29,17 +30,18 @@ namespace MarkdownBlogPagePublisher
              * 4) markdown file creation
              */
 
-            Parser.Default.ParseArguments<PublishAzure>(args)
-                .WithParsed<PublishAzure>(async options => await PublishToAzure(options));
+             await Parser.Default.ParseArguments<PublishAzure>(args)
+                .WithParsedAsync<PublishAzure>(async options => await PublishToAzure(options));
+            Console.ReadLine();
         }
 
         private async static Task PublishToAzure(PublishAzure options)
         {
-            var credentials = new InteractiveBrowserCredential();
+            var credentials = new StorageSharedKeyCredential(options.AzureStorageName, options.AzureAccessKey);
             var storageUri = new Uri($"https://{options.AzureStorageName}.blob.core.windows.net");
             BlobServiceClient blobServiceClient = new BlobServiceClient(storageUri, credentials);
             var blobContainer = blobServiceClient.GetBlobContainerClient(options.AzureContainerName);
-            if(!(await blobContainer.ExistsAsync()))
+            if (!(await blobContainer.ExistsAsync()))
             {
                 await blobContainer.CreateAsync();
                 List<FileInfo> files = GetFilesToUpload(options.InputFolderPath);
@@ -70,13 +72,10 @@ namespace MarkdownBlogPagePublisher
 
         private async static Task<string> UploadFile(BlobContainerClient blobContainer, FileInfo file)
         {
-            using (var stream = new FileStream(file.FullName, FileMode.Open))
-            {
-                var client = blobContainer.GetBlobClient(file.Name);
-                await client.UploadAsync(stream);
-                return client.Uri.ToString();
-            }
-
+            var client = blobContainer.GetBlobClient(file.Name);
+            await client.UploadAsync(file.FullName);
+            await client.SetHttpHeadersAsync(new BlobHttpHeaders() { ContentType = $"image/{file.Extension.Replace(".", "")}" });
+            return client.Uri.ToString();
         }
 
         private static List<FileInfo> GetFilesToUpload(string inputFolderPath)

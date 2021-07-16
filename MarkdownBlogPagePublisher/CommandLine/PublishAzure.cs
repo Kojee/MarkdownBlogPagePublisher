@@ -10,9 +10,11 @@ namespace MarkdownBlogPagePublisher.CommandLine
     [Verb("azure", HelpText = "Type of hosting for your images")]
     public class PublishAzure : Options
     {
-        [Option(longName: "storage", HelpText = "Azure storage account name where to upload the images", Required = true)]
+        [Option(longName: "storage", HelpText = "Name of the azure storage account where to upload the images", Required = true)]
         public string AzureStorageName { get; set; }
-        [Option(longName: "container", HelpText = "Azure storage account name where to upload the images", Required = true)]
+        [Option(longName: "container", HelpText = "Name of the container where to upload the images", Required = true)]
         public string AzureContainerName { get; set; }
+        [Option(longName: "key", HelpText = "Access key for the specified storage account", Required = true)]
+        public string AzureAccessKey { get; set; }
     }
 }
