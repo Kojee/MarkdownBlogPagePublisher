@@ -43,7 +43,7 @@ namespace MarkdownBlogPagePublisher
             var blobContainer = blobServiceClient.GetBlobContainerClient(options.AzureContainerName);
             if (!(await blobContainer.ExistsAsync()))
             {
-                await blobContainer.CreateAsync();
+                await blobContainer.CreateAsync(PublicAccessType.Blob);
                 List<FileInfo> files = GetFilesToUpload(options.InputFolderPath);
                 var uploadTasks = new List<Task<string>>();
                 foreach (var file in files)
