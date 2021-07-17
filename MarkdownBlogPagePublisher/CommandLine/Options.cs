@@ -11,6 +11,7 @@ namespace MarkdownBlogPagePublisher.CommandLine
     {
         [Option(shortName: 'i', longName: "input", HelpText = "Input folder where to retrieve the images for the markdown page", Required = true)]
         public string InputFolderPath { get; set; }
+
         [Option(shortName: 'o', longName: "output", HelpText = "Full filename for the final markdown page")]
         public string OutputFilePath { get; set; }
     }

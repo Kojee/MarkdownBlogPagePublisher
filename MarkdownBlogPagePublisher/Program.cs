@@ -4,6 +4,7 @@ using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using CommandLine;
 using MarkdownBlogPagePublisher.CommandLine;
+using Serilog;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -29,32 +30,40 @@ namespace MarkdownBlogPagePublisher
              *      ...
              * 4) markdown file creation
              */
+            Log.Logger = new LoggerConfiguration()
+                            .MinimumLevel.Information()
+                            .WriteTo.Console()
+                            .CreateLogger();
 
              await Parser.Default.ParseArguments<PublishAzure>(args)
                 .WithParsedAsync<PublishAzure>(async options => await PublishToAzure(options));
-            Console.ReadLine();
         }
 
         private async static Task PublishToAzure(PublishAzure options)
         {
             var credentials = new StorageSharedKeyCredential(options.AzureStorageName, options.AzureAccessKey);
             var storageUri = new Uri($"https://{options.AzureStorageName}.blob.core.windows.net");
+            Log.Information("Starting Azure publication on storage {Storage}{Container} of folder {Folder} - Overwrite {Overwrite}",
+                storageUri, options.AzureContainerName, options.InputFolderPath, options.Overwrite);
             BlobServiceClient blobServiceClient = new BlobServiceClient(storageUri, credentials);
             var blobContainer = blobServiceClient.GetBlobContainerClient(options.AzureContainerName);
-            if (!(await blobContainer.ExistsAsync()))
+            var containerExists = await blobContainer.ExistsAsync();
+            if (!(containerExists)
+                || (containerExists && options.Overwrite))
             {
-                await blobContainer.CreateAsync(PublicAccessType.Blob);
                 List<FileInfo> files = GetFilesToUpload(options.InputFolderPath);
+                Log.Information("Uploading {Count} files", files.Count);
                 var uploadTasks = new List<Task<string>>();
                 foreach (var file in files)
-                    uploadTasks.Add(UploadFile(blobContainer, file));
+                    uploadTasks.Add(UploadFile(blobContainer, file, options.Overwrite));
                 await Task.WhenAll(uploadTasks);
+                Log.Information("Upload done");
                 var downloadLinks = uploadTasks.Select(t => t.Result);
                 CreateMarkdownFile(downloadLinks, options.OutputFilePath);
             }
             else
             {
-                //Show error to user
+                Log.Error("Container {Container} already exixts but overwrite is set to {Overwrite}", options.AzureContainerName, options.Overwrite);
             }
         }
 
@@ -70,12 +79,18 @@ namespace MarkdownBlogPagePublisher
             }
         }
 
-        private async static Task<string> UploadFile(BlobContainerClient blobContainer, FileInfo file)
+        private async static Task<string> UploadFile(BlobContainerClient blobContainer, FileInfo file, bool overwrite)
         {
             var client = blobContainer.GetBlobClient(file.Name);
-            await client.UploadAsync(file.FullName);
-            await client.SetHttpHeadersAsync(new BlobHttpHeaders() { ContentType = $"image/{file.Extension.Replace(".", "")}" });
-            return client.Uri.ToString();
+            if (overwrite || !(await client.ExistsAsync()))
+            {
+                await client.UploadAsync(file.FullName, new BlobUploadOptions());
+                await client.SetHttpHeadersAsync(new BlobHttpHeaders() { ContentType = $"image/{file.Extension.Replace(".", "")}" });
+                return client.Uri.ToString();
+            }else
+            {
+                return client.Uri.ToString();
+            }
         }
 
         private static List<FileInfo> GetFilesToUpload(string inputFolderPath)
