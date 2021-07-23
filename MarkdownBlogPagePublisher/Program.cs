@@ -47,7 +47,7 @@ namespace MarkdownBlogPagePublisher
                 storageUri, options.AzureContainerName, options.InputFolderPath, options.Overwrite);
             BlobServiceClient blobServiceClient = new BlobServiceClient(storageUri, credentials);
             var blobContainer = blobServiceClient.GetBlobContainerClient(options.AzureContainerName);
-            await blobContainer.CreateIfNotExistsAsync();
+            await blobContainer.CreateIfNotExistsAsync(PublicAccessType.Blob);
             List<FileInfo> files = GetFilesToUpload(options.InputFolderPath);
             Log.Information("Uploading {Count} files", files.Count);
             var uploadTasks = new List<Task<string>>();
