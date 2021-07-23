@@ -47,24 +47,16 @@ namespace MarkdownBlogPagePublisher
                 storageUri, options.AzureContainerName, options.InputFolderPath, options.Overwrite);
             BlobServiceClient blobServiceClient = new BlobServiceClient(storageUri, credentials);
             var blobContainer = blobServiceClient.GetBlobContainerClient(options.AzureContainerName);
-            var containerExists = await blobContainer.ExistsAsync();
-            if (!(containerExists)
-                || (containerExists && options.Overwrite))
-            {
-                List<FileInfo> files = GetFilesToUpload(options.InputFolderPath);
-                Log.Information("Uploading {Count} files", files.Count);
-                var uploadTasks = new List<Task<string>>();
-                foreach (var file in files)
-                    uploadTasks.Add(UploadFile(blobContainer, file, options.Overwrite));
-                await Task.WhenAll(uploadTasks);
-                Log.Information("Upload done");
-                var downloadLinks = uploadTasks.Select(t => t.Result);
-                CreateMarkdownFile(downloadLinks, options.OutputFilePath);
-            }
-            else
-            {
-                Log.Error("Container {Container} already exixts but overwrite is set to {Overwrite}", options.AzureContainerName, options.Overwrite);
-            }
+            await blobContainer.CreateIfNotExistsAsync();
+            List<FileInfo> files = GetFilesToUpload(options.InputFolderPath);
+            Log.Information("Uploading {Count} files", files.Count);
+            var uploadTasks = new List<Task<string>>();
+            foreach (var file in files)
+                uploadTasks.Add(UploadFile(blobContainer, file, options.Overwrite));
+            await Task.WhenAll(uploadTasks);
+            Log.Information("Upload done");
+            var downloadLinks = uploadTasks.Select(t => t.Result);
+            CreateMarkdownFile(downloadLinks, options.OutputFilePath);
         }
 
         private static void CreateMarkdownFile(IEnumerable<string> downloadLinks, string outputFilePath)
@@ -84,7 +76,7 @@ namespace MarkdownBlogPagePublisher
             var client = blobContainer.GetBlobClient(file.Name);
             if (overwrite || !(await client.ExistsAsync()))
             {
-                await client.UploadAsync(file.FullName, new BlobUploadOptions());
+                await client.UploadAsync(file.FullName, overwrite);
                 await client.SetHttpHeadersAsync(new BlobHttpHeaders() { ContentType = $"image/{file.Extension.Replace(".", "")}" });
                 return client.Uri.ToString();
             }else
